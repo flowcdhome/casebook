@@ -1,0 +1,206 @@
+<!DOCTYPE html>
+<html lang="ru"><head><meta charset="utf-8"><title>Casebook</title>
+<style>
+:root{--bg:#121212;--panel:#181818;--line:#2a2a2a;--text:#e8e4dc;--dim:#8a867e;--ac:#d9a441;--mono:"JetBrains Mono","DejaVu Sans Mono",monospace}
+*{box-sizing:border-box;margin:0}
+html,body{height:100%}
+body{display:grid;grid-template-columns:230px 1fr;background:var(--bg);color:var(--text);font:14px/1.45 system-ui,"Inter",sans-serif;overflow:hidden}
+button,input,select,textarea{font:inherit;color:inherit}
+button{background:none;border:1px solid var(--line);padding:5px 11px;cursor:pointer;transition:border-color .15s,color .15s,background .15s}
+button:hover{border-color:var(--ac);color:var(--ac)}
+button.pri{background:var(--ac);color:#121212;border-color:var(--ac)}button.pri:hover{filter:brightness(1.1);color:#121212}
+input,select,textarea{background:var(--panel);border:1px solid var(--line);padding:6px 9px;outline:0;transition:border-color .15s}
+input:focus,select:focus,textarea:focus{border-color:var(--ac)}
+textarea{width:100%;resize:vertical;min-height:90px;font-family:var(--mono);font-size:13px}
+#side{border-right:1px solid var(--line);padding:18px 14px;display:flex;flex-direction:column;gap:6px;overflow:auto}
+.logo{font-weight:700;letter-spacing:.08em;text-transform:uppercase;font-size:12px;color:var(--dim);margin-bottom:10px}
+.case{text-align:left;border:0;border-left:2px solid transparent;padding:7px 10px;color:var(--dim);width:100%}
+.case.on{border-left-color:var(--ac);color:var(--text);background:var(--panel)}
+.sp{flex:1}
+#main{overflow:auto;padding:22px 28px}
+.bar{display:flex;gap:10px;align-items:center;margin-bottom:16px}
+.title{font-size:22px;font-weight:600;background:none;border:0;border-bottom:1px solid transparent;flex:1;padding:2px 0}
+.title:focus,.title:hover{border-bottom-color:var(--line)}
+.tabs{display:flex;gap:18px;border-bottom:1px solid var(--line);margin-bottom:16px}
+.tab{border:0;border-bottom:2px solid transparent;padding:6px 0;color:var(--dim)}.tab.on{color:var(--text);border-bottom-color:var(--ac)}
+.cols{display:grid;grid-template-columns:300px 1fr;gap:24px}
+.add{display:flex;gap:6px;margin-bottom:12px}.add input{flex:1;min-width:0}
+.lead{display:flex;gap:8px;align-items:baseline;width:100%;text-align:left;border:0;border-bottom:1px solid var(--line);padding:8px 4px;animation:in .18s ease-out}
+.lead.on{background:var(--panel);box-shadow:inset 2px 0 var(--ac)}
+.tag{font-size:11px;color:var(--dim);text-transform:uppercase;letter-spacing:.06em;min-width:56px}
+.val{font-family:var(--mono);word-break:break-all}
+h3{font-size:12px;text-transform:uppercase;letter-spacing:.08em;color:var(--dim);font-weight:600;margin:20px 0 8px}
+.row{display:flex;gap:8px;align-items:center;padding:4px 0;border-bottom:1px solid var(--line);animation:in .18s ease-out}
+.row .val{flex:1}.row button{padding:2px 8px;font-size:12px}
+.chips{display:flex;flex-wrap:wrap;gap:6px}
+pre{background:var(--panel);border:1px solid var(--line);padding:8px;font:12px/1.4 var(--mono);max-height:140px;overflow:auto;white-space:pre-wrap;margin-top:8px}
+.dim{color:var(--dim)}.empty{margin:18vh auto;text-align:center;max-width:360px;display:grid;gap:14px}
+#ov{position:fixed;inset:0;background:rgba(0,0,0,.72);display:grid;place-items:center;animation:fade .2s}
+#ov[hidden]{display:none}
+.card{background:var(--panel);border:1px solid var(--line);padding:26px;width:min(520px,90vw);display:grid;gap:12px;animation:in .22s ease-out}
+.card h2{font-size:18px}.card p{color:var(--dim)}.card .nav{display:flex;justify-content:space-between;align-items:center}
+@keyframes in{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:none}}
+@keyframes fade{from{opacity:0}to{opacity:1}}
+@media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+</style></head><body>
+<aside id="side"></aside><main id="main"></main><div id="ov" hidden></div>
+<script>
+const $ = s => document.querySelector(s), E = encodeURIComponent, uid = () => Math.random().toString(36).slice(2, 9);
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const TYPES = { username: 'ник', email: 'почта', phone: 'телефон', domain: 'домен', url: 'ссылка', name: 'имя', note: 'текст' };
+const RUN = { username: ['sherlock', 'maigret'], email: ['holehe'] };
+let S = { cases: [], cur: null, lead: null, tab: 'leads', view: 'case', conf: {}, confPath: '', log: {} }, saveT;
+const save = () => { clearTimeout(saveT); saveT = setTimeout(() => api.save(S.cases), 300); };
+const cur = () => S.cases.find(c => c.id === S.cur);
+const curLead = () => (cur()?.leads || []).find(l => l.id === S.lead);
+
+function detect(v) {
+  if (/^https?:\/\//i.test(v)) return 'url';
+  if (/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v)) return 'email';
+  if (/^\+?[\d\s().-]{7,}$/.test(v)) return 'phone';
+  if (/^(?:[a-z0-9-]+\.)+[a-z]{2,}$/i.test(v)) return 'domain';
+  return /\s/.test(v) ? 'name' : 'username';
+}
+const g = q => 'https://www.google.com/search?q=' + E(q);
+function pivots(t, v) {
+  const q = '"' + v + '"', d = v.replace(/\D/g, '');
+  const web = [['Google', g(q)], ['Bing', 'https://www.bing.com/search?q=' + E(q)], ['DuckDuckGo', 'https://duckduckgo.com/?q=' + E(q)], ['Yandex', 'https://yandex.com/search/?text=' + E(q)]];
+  const by = {
+    username: [['GitHub', 'https://github.com/' + E(v)], ['Reddit', 'https://www.reddit.com/user/' + E(v)], ['Telegram', 'https://t.me/' + E(v)], ['X', 'https://x.com/' + E(v)], ['Instagram', 'https://www.instagram.com/' + E(v) + '/'], ['WhatsMyName', 'https://whatsmyname.app/?q=' + E(v)]],
+    email: [['GitHub', 'https://github.com/search?type=users&q=' + E(v)]],
+    phone: [['Telegram', 'https://t.me/+' + d]],
+    domain: [['crt.sh', 'https://crt.sh/?q=' + E(v)], ['Wayback', 'https://web.archive.org/web/*/' + v], ['urlscan', 'https://urlscan.io/search/#' + E(v)], ['who.is', 'https://who.is/whois/' + E(v)], ['Shodan', 'https://www.shodan.io/search?query=' + E(v)]],
+    url: [['Wayback', 'https://web.archive.org/web/*/' + v], ['Yandex Images', 'https://yandex.com/images/search?rpt=imageview&url=' + E(v)], ['Google Lens', 'https://lens.google.com/uploadbyurl?url=' + E(v)], ['TinEye', 'https://tineye.com/search?url=' + E(v)]],
+    name: [['LinkedIn', g('site:linkedin.com/in ' + q)], ['VK', 'https://vk.com/search?c%5Bsection%5D=people&c%5Bq%5D=' + E(v)], ['Facebook', 'https://www.facebook.com/search/people/?q=' + E(v)]],
+  };
+  return [...(by[t] || []), ...(t === 'note' ? [] : web)];
+}
+function dorks(t, v) {
+  const q = '"' + v + '"';
+  const by = {
+    username: [q, 'inurl:' + v, 'site:github.com ' + q, 'site:pastebin.com ' + q, 'site:t.me ' + q],
+    email: [q, q + ' filetype:pdf', 'site:pastebin.com ' + q, '"' + v.split('@')[0] + '" "' + v.split('@')[1] + '"'],
+    phone: [q, '"' + v.replace(/\D/g, '') + '"', 'site:t.me ' + q],
+    domain: ['site:' + v, 'site:' + v + ' filetype:pdf', '"@' + v + '"', 'inurl:' + v + ' -site:' + v],
+    name: [q, q + ' site:linkedin.com/in', q + ' filetype:pdf', q + ' (резюме OR cv)'],
+    url: [q, 'link:' + v],
+  };
+  return by[t] || [q];
+}
+
+function add(value, type, from) {
+  const c = cur(); value = value.trim();
+  if (!c || !value) return;
+  const l = { id: uid(), type: type || detect(value), value, note: '', found: [], from: from || '' };
+  c.leads.unshift(l); S.lead = l.id; save(); render();
+}
+function toMd() {
+  const c = cur();
+  return [`# ${c.title}`, '', c.notes || '', ...c.leads.flatMap(l => ['', `## [${TYPES[l.type]}] ${l.value}`, l.note || '', ...l.found.map(f => `- ${f.site}${f.url ? ': ' + f.url : ''}`)])].join('\n');
+}
+
+function renderSide() {
+  $('#side').innerHTML = `<div class="logo">Casebook</div><button class="pri" data-a="newCase">Новое дело</button>` +
+    S.cases.map(c => `<button class="case ${c.id === S.cur && S.view === 'case' ? 'on' : ''}" data-a="selCase" data-id="${c.id}">${esc(c.title)}</button>`).join('') +
+    `<div class="sp"></div><button data-a="settings">Настройки</button><button data-a="help">Обучение</button>`;
+}
+function render() {
+  renderSide();
+  if (S.view === 'settings') return renderSettings();
+  const c = cur(), m = $('#main');
+  if (!c) { m.innerHTML = `<div class="empty"><h2>Дел пока нет</h2><p class="dim">Дело хранит зацепки, найденное и заметки. Всё сохраняется само.</p><button class="pri" data-a="newCase">Создать первое дело</button></div>`; return; }
+  const l = curLead();
+  m.innerHTML = `<div class="bar"><input class="title" id="title" value="${esc(c.title)}"><button data-a="export">Экспорт .md</button><button data-a="delCase">Удалить дело</button></div>
+  <div class="tabs"><button class="tab ${S.tab === 'leads' ? 'on' : ''}" data-a="tab" data-id="leads">Зацепки (${c.leads.length})</button><button class="tab ${S.tab === 'notes' ? 'on' : ''}" data-a="tab" data-id="notes">Заметки</button></div>` +
+    (S.tab === 'notes' ? `<textarea id="notes" style="min-height:50vh" placeholder="Свободные заметки по делу">${esc(c.notes)}</textarea>` :
+    `<div class="cols"><div><form class="add" id="addf"><select id="atype"><option value="">авто</option>${Object.entries(TYPES).map(([k, v]) => `<option value="${k}">${v}</option>`).join('')}</select><input id="aval" placeholder="ник, почта, телефон, домен…" autocomplete="off"></form>` +
+    (c.leads.map(x => `<button class="lead ${x.id === S.lead ? 'on' : ''}" data-a="selLead" data-id="${x.id}"><span class="tag">${TYPES[x.type]}</span><span class="val">${esc(x.value)}</span></button>`).join('') || `<p class="dim">Добавьте первую зацепку: то, от чего можно оттолкнуться.</p>`) +
+    `</div><div>${l ? leadView(l) : '<p class="dim">Выберите зацепку слева.</p>'}</div></div>`);
+}
+function leadView(l) {
+  const log = S.log[l.id];
+  return `<div class="bar"><span class="tag">${TYPES[l.type]}</span><span class="val" style="flex:1;font-size:16px">${esc(l.value)}</span><button data-a="delLead">Удалить</button></div>
+  ${RUN[l.type] ? `<h3>Проверить здесь</h3><div class="chips">${RUN[l.type].map(t => `<button class="pri" data-a="run" data-id="${t}">${t}</button>`).join('')}</div>${log ? `<pre>${esc(log.text.slice(-1500))}</pre>` : ''}` : ''}
+  <h3>Найденное (${l.found.length})</h3>${l.found.map(f => `<div class="row"><span class="val">${esc(f.site)} <span class="dim">${esc(f.url)}</span></span>${f.url ? `<button data-a="open" data-u="${esc(f.url)}">открыть</button><button data-a="promote" data-id="${f.id}">в зацепки</button>` : ''}<button data-a="delFound" data-id="${f.id}">×</button></div>`).join('') || '<p class="dim">Пока пусто.</p>'}
+  <h3>Быстрые ссылки (откроются в браузере)</h3><div class="chips">${pivots(l.type, l.value).map(([n, u]) => `<button data-a="open" data-u="${esc(u)}">${esc(n)}</button>`).join('')}</div>
+  <h3>Google dorks</h3>${dorks(l.type, l.value).map(d => `<div class="row"><span class="val">${esc(d)}</span><button data-a="open" data-u="${esc(g(d))}">искать</button><button data-a="copy" data-u="${esc(d)}">копировать</button></div>`).join('')}
+  <h3>Заметка</h3><textarea id="lnote" placeholder="Откуда зацепка, что подтверждено, что нет">${esc(l.note)}</textarea>`;
+}
+function renderSettings() {
+  $('#main').innerHTML = `<div class="bar"><h2 style="flex:1">Настройки</h2></div><p class="dim" style="margin-bottom:10px">Это тот же файл, что лежит здесь: ${esc(S.confPath)}. Можно править и там (изменения подхватятся при возврате в окно), и тут.</p>
+  <textarea id="conf" style="min-height:300px">${esc(JSON.stringify(S.conf, null, 2))}</textarea><div class="bar" style="margin-top:10px"><button class="pri" data-a="saveConf">Сохранить</button><span id="cmsg" class="dim"></span></div>
+  <h3>Источники</h3><p class="dim">Sherlock, Maigret и holehe запускаются как отдельные программы, установленные у вас, и в Casebook не входят. Быстрые ссылки это обычные поисковые адреса открытых сервисов; Casebook ничего с них не скачивает.</p>`;
+}
+function applyConf() { document.documentElement.style.setProperty('--ac', S.conf.accent || '#d9a441'); }
+
+const STEPS = [
+  ['Дело', 'Дело это папка расследования. Создайте его слева. Закрыли программу, выключили ПК, завтра открыли, и всё на месте.'],
+  ['Зацепка', 'Зацепка это то, от чего вы отталкиваетесь: ник, почта, телефон, домен, ссылка, имя. Тип определяется сам. Добавляйте их сколько угодно.'],
+  ['Быстрые ссылки и dork', 'У каждой зацепки есть готовые поисковые ссылки и Google-dork запросы. Нашли ник через dork, сразу добавляйте его как новую зацепку.'],
+  ['Проверка внутри', 'Для ника доступны Sherlock и Maigret, для почты holehe, если они установлены. Результат появится под зацепкой. Лишнее удаляйте, нужное отправляйте в зацепки.'],
+  ['Отчёт и порядок', 'Экспорт .md вместо ручного отчёта в Writer. Горячие клавиши и цвет меняются в Настройках или в config.json. Работайте только с открытыми данными и в рамках закона.'],
+];
+function tour(i) {
+  const o = $('#ov'); o.hidden = false;
+  o.innerHTML = `<div class="card"><span class="dim">${i + 1} из ${STEPS.length}</span><h2>${STEPS[i][0]}</h2><p>${STEPS[i][1]}</p><div class="nav"><button data-a="tourEnd">Пропустить</button><button class="pri" data-a="tourNext" data-id="${i + 1}">${i + 1 < STEPS.length ? 'Дальше' : 'Начать'}</button></div></div>`;
+}
+
+document.addEventListener('click', ev => {
+  const b = ev.target.closest('[data-a]'); if (!b) return;
+  const a = b.dataset.a, id = b.dataset.id, c = cur(), l = curLead();
+  if (a === 'newCase') { const n = { id: uid(), title: 'Дело ' + (S.cases.length + 1), notes: '', leads: [] }; S.cases.unshift(n); S.cur = n.id; S.lead = null; S.view = 'case'; S.tab = 'leads'; save(); render(); $('#title')?.select(); }
+  else if (a === 'selCase') { S.cur = id; S.lead = null; S.view = 'case'; render(); }
+  else if (a === 'delCase') { if (confirm('Удалить дело «' + c.title + '» целиком?')) { S.cases = S.cases.filter(x => x !== c); S.cur = S.cases[0]?.id || null; save(); render(); } }
+  else if (a === 'tab') { S.tab = id; render(); }
+  else if (a === 'selLead') { S.lead = id; render(); }
+  else if (a === 'delLead') { if (confirm('Удалить зацепку?')) { c.leads = c.leads.filter(x => x !== l); S.lead = null; save(); render(); } }
+  else if (a === 'delFound') { l.found = l.found.filter(f => f.id !== id); save(); render(); }
+  else if (a === 'promote') { const f = l.found.find(f => f.id === id); add(f.url, 'url', l.value); }
+  else if (a === 'open') api.open(b.dataset.u);
+  else if (a === 'copy') navigator.clipboard.writeText(b.dataset.u);
+  else if (a === 'export') api.exportMd(c.title.replace(/[\\/:*?"<>|]/g, '_'), toMd());
+  else if (a === 'settings') { S.view = 'settings'; render(); }
+  else if (a === 'saveConf') api.confSave($('#conf').value).then(cf => { S.conf = cf; applyConf(); $('#cmsg').textContent = 'Сохранено'; }).catch(() => { $('#cmsg').textContent = 'Ошибка: это не корректный JSON'; });
+  else if (a === 'help') tour(0);
+  else if (a === 'tourNext') +id < STEPS.length ? tour(+id) : (localStorage.seen = 1, $('#ov').hidden = true);
+  else if (a === 'tourEnd') { localStorage.seen = 1; $('#ov').hidden = true; }
+  else if (a === 'run') {
+    S.log[l.id] = { text: 'запуск ' + id + '…\n' }; render();
+    api.run(id, l.value).then(r => { S.log[l.id].text += r.error ? 'Ошибка: ' + r.error + '\n' : 'готово (код ' + r.code + ')\n'; render(); });
+  }
+});
+document.addEventListener('submit', ev => { ev.preventDefault(); const i = $('#aval'); add(i.value, $('#atype').value); });
+document.addEventListener('input', ev => {
+  const c = cur(), l = curLead();
+  if (ev.target.id === 'title') { c.title = ev.target.value; renderSide(); }
+  else if (ev.target.id === 'notes') c.notes = ev.target.value;
+  else if (ev.target.id === 'lnote') l.note = ev.target.value;
+  else return;
+  save();
+});
+api.onRun(({ tool, value, chunk }) => {
+  const l = (cur()?.leads || []).find(x => x.value === value && RUN[x.type]?.includes(tool)); if (!l) return;
+  const text = chunk.replace(/\x1b\[[0-9;]*[A-Za-z]/g, '');
+  (S.log[l.id] ||= { text: '' }).text += text;
+  for (const line of text.split('\n')) {
+    const m = line.match(/\[\+\]\s+(.+?):\s+(https?:\/\/\S+)/) || (tool === 'holehe' && line.match(/\[\+\]\s+(\S+)/));
+    if (!m) continue;
+    const site = m[1], url = m[2] || '';
+    if (!l.found.some(f => f.site === site && f.url === url)) l.found.push({ id: uid(), site, url });
+  }
+  save(); if (S.lead === l.id && S.view === 'case' && S.tab === 'leads') { const t = $('#lnote')?.value; render(); if (t !== undefined && $('#lnote')) $('#lnote').value = t; }
+});
+const hit = (e, b) => { const p = String(b).toLowerCase().split('+'), k = p.pop(); return e.ctrlKey === p.includes('ctrl') && e.shiftKey === p.includes('shift') && e.altKey === p.includes('alt') && e.key.toLowerCase() === k; };
+addEventListener('keydown', e => {
+  const b = S.conf.binds || {};
+  if (hit(e, b.newCase)) { e.preventDefault(); document.querySelector('[data-a=newCase]').click(); }
+  else if (hit(e, b.addLead)) { e.preventDefault(); $('#aval')?.focus(); }
+  else if (hit(e, b.export) && cur()) { e.preventDefault(); document.querySelector('[data-a=export]')?.click(); }
+  else if (hit(e, b.help)) { e.preventDefault(); tour(0); }
+});
+addEventListener('focus', async () => { if (S.view === 'settings') return; S.conf = (await api.load()).conf; applyConf(); });
+(async () => {
+  const d = await api.load(); S.cases = d.cases; S.conf = d.conf; S.confPath = d.confPath; S.cur = S.cases[0]?.id || null;
+  applyConf(); render(); if (!localStorage.seen) tour(0);
+})();
+</script></body></html>

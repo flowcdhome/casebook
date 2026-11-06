@@ -1,0 +1,21 @@
+<!DOCTYPE html>
+<html lang="ru"><head><meta charset="utf-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self'">
+<title>Сервис</title>
+<style>
+*{box-sizing:border-box;margin:0}
+body{height:48px;display:flex;gap:6px;align-items:center;padding:0 8px;background:#181818;border-bottom:1px solid #2a2a2a;color:#e8e4dc;font:13px system-ui,sans-serif;overflow:hidden}
+button{background:none;border:1px solid #2a2a2a;color:inherit;padding:5px 10px;cursor:pointer;font:inherit}
+button:hover{border-color:#d9a441;color:#d9a441}
+button.pri{background:#d9a441;color:#121212;border-color:#d9a441}
+input{flex:1;min-width:0;background:#121212;border:1px solid #2a2a2a;color:inherit;padding:6px 9px;font:inherit;outline:0}
+input:focus{border-color:#d9a441}
+#msg{color:#8a867e;min-width:90px;text-align:right}
+</style></head><body>
+<button id="b" title="Назад">←</button><button id="f" title="Вперёд">→</button><button id="r" title="Обновить">⟳</button>
+<input id="u" placeholder="Адрес" spellcheck="false">
+<button id="gl" class="pri" title="Добавить в зацепку все внешние ссылки со страницы">Забрать ссылки</button>
+<button id="gs" title="Добавить в зацепку выделенный текст">Забрать выделенное</button>
+<span id="msg"></span>
+<script src="svc-ui.js"></script>
+</body></html>
