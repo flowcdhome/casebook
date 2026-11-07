@@ -4,7 +4,7 @@ const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'cb-'));
 process.env.XDG_CONFIG_HOME = tmp;
 const handlers = {}, on = {}, sent = [];
 const electron = {
-  app: { setPath() {}, whenReady: () => new Promise(() => {}), on() {}, getVersion: () => '0.0.0-test', quit() {} },
+  app: { setPath() {}, requestSingleInstanceLock: () => true, whenReady: () => new Promise(() => {}), on() {}, getVersion: () => '0.0.0-test', quit() {} },
   BrowserWindow: class {}, WebContentsView: class {}, shell: { openExternal() {} }, dialog: {},
   ipcMain: { handle: (c, f) => (handlers[c] = f), on: (c, f) => (on[c] = f) },
 };
