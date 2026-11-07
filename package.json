@@ -1,6 +1,6 @@
 {
   "name": "casebook",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "description": "Рабочее место для OSINT-расследований: дела, зацепки, проверки, холст со стрелками",
   "main": "main.js",
   "scripts": {
@@ -8,5 +8,7 @@
     "test": "node test/board.test.js && node test/app.test.js && node test/main.test.js"
   },
   "license": "MIT",
-  "devDependencies": { "electron": "^33.2.0" }
+  "devDependencies": {
+    "electron": "^33.2.0"
+  }
 }

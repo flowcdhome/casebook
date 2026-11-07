@@ -5,6 +5,8 @@ const Lib = require('./renderer/lib.js');
 const BASE = path.join(process.env.XDG_CONFIG_HOME || path.join(os.homedir(), '.config'), 'casebook');
 const CASES = path.join(BASE, 'cases.json'), CONF = path.join(BASE, 'config.json');
 app.setPath('userData', BASE);
+// Cloudflare и подобные проверки смотрят на согласованность User-Agent и client hints: убираем только метки «Electron» и имя приложения
+if (app.userAgentFallback) app.userAgentFallback = app.userAgentFallback.replace(/\sElectron\/\S+/, '').replace(/\scasebook\/\S+/, '');
 
 let win = null, lastBackup = 0;
 const procs = new Map(), svcs = new Map();
@@ -84,7 +86,6 @@ function openService(url, leadId) {
   w.removeMenu();
   w.loadFile(path.join(__dirname, 'renderer', 'svc.html'));
   const v = new WebContentsView({ webPreferences: { partition: 'persist:svc', sandbox: true, contextIsolation: true } });
-  v.webContents.setUserAgent(`Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/${process.versions.chrome} Safari/537.36`);
   w.contentView.addChildView(v);
   const fit = () => { const [cw, ch] = w.getContentSize(); v.setBounds({ x: 0, y: 48, width: cw, height: Math.max(0, ch - 48) }); };
   fit(); w.on('resize', fit);
@@ -97,6 +98,8 @@ function openService(url, leadId) {
     v.webContents.loadURL('data:text/html;charset=utf-8,' + encodeURIComponent(`<body style="background:#121212;color:#e8e4dc;font:16px system-ui,sans-serif;padding:40px;line-height:1.6"><h2>Страница не открылась</h2><p>${esc(desc)} (код ${code})</p><p>Адрес: <b>${esc(u)}</b></p><p>Проверьте адрес. Введите правильный в поле сверху и нажмите Enter, а потом поправьте его в config.json (раздел services).</p>`));
   });
   v.webContents.on('page-title-updated', (e, t) => { if (!w.isDestroyed()) w.setTitle('Casebook: ' + t); });
+  v.webContents.session.webRequest.onErrorOccurred(d => { if (d.error !== 'net::ERR_ABORTED') log('[сервис] не загрузилось:', d.url.slice(0, 140), d.error); });
+  v.webContents.on('console-message', (e, level, msg) => { if (level >= 2) log('[сервис] консоль:', String(msg).slice(0, 200)); });
   v.webContents.loadURL(url);
   svcs.set(id, { w, v, leadId });
   w.on('closed', () => svcs.delete(id));
@@ -105,6 +108,7 @@ ipcMain.handle('svc:open', (e, url, leadId) => { if (/^https?:\/\//i.test(url)) 
 for (const [ch, fn] of Object.entries({ back: v => v.webContents.goBack(), forward: v => v.webContents.goForward(), reload: v => v.webContents.reload() })) {
   ipcMain.on('svc:' + ch, e => { const s = svcs.get(e.sender.id); if (s) fn(s.v); });
 }
+ipcMain.on('svc:external', e => { const s = svcs.get(e.sender.id); const u = s && s.v.webContents.getURL(); if (u && /^https?:\/\//i.test(u)) shell.openExternal(u); });
 ipcMain.on('svc:go', (e, u) => { const s = svcs.get(e.sender.id); if (s && u) s.v.webContents.loadURL(/^https?:\/\//i.test(u) ? u : 'https://' + u); });
 ipcMain.handle('svc:grab', async (e, what) => {
   const s = svcs.get(e.sender.id);

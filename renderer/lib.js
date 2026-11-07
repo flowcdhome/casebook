@@ -61,7 +61,7 @@
       whois: { cmd: 'whois', args: ['{v}'], types: ['domain', 'ip'] },
     },
     services: [
-      { name: 'OSINTSearch', url: 'https://osintsearch.org/', types: ['username', 'email', 'phone', 'name'] },
+      { name: 'OSINTSearch', url: 'https://osintsearch.org/?q={v}', types: ['username', 'email', 'phone', 'name'] },
       { name: 'OSINTList', url: 'https://osintlist.cc/', types: ['username', 'email', 'phone', 'name', 'domain'] },
     ],
   };

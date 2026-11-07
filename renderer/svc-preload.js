@@ -4,6 +4,7 @@ contextBridge.exposeInMainWorld('svc', {
   back: () => ipcRenderer.send('svc:back'),
   forward: () => ipcRenderer.send('svc:forward'),
   reload: () => ipcRenderer.send('svc:reload'),
+  external: () => ipcRenderer.send('svc:external'),
   grab: what => ipcRenderer.invoke('svc:grab', what),
   onUrl: cb => ipcRenderer.on('svc:url', (_, u) => cb(u)),
 });

@@ -107,7 +107,7 @@
     return `<div class="bar"><span class="tag">${TYPES[l.type]}</span><span class="val" style="flex:1;font-size:16px">${esc(l.value)}</span><button data-a="toBoard">На холст</button><button data-a="delLead">Удалить</button></div>
     ${rs.length ? `<h3>Проверить здесь</h3><div class="chips">${rs.map(n => `<button class="pri" data-a="run" data-id="${esc(n)}">${esc(n)}</button>`).join('')}</div><div id="log">${logHtml(l)}</div>` : ''}
     ${sv.length ? `<h3>Сервисы (отдельное окно, вход сохраняется)</h3><div class="chips">${sv.map(s => `<button data-a="svc" data-id="${esc(s.name)}">${esc(s.name)}</button>`).join('')}</div>` : ''}
-    <h3>Найденное (<span id="fcount">${l.found.length}</span>)</h3><div id="found">${foundHtml(l)}</div>
+    <h3>Найденное (<span id="fcount">${l.found.length}</span>)</h3><div class="chips" style="margin-bottom:6px"><button data-a="pasteFound">Вставить найденное из буфера</button></div><div id="found">${foundHtml(l)}</div>
     <h3>Быстрые ссылки (откроются в браузере)</h3><div class="chips">${pivots(l.type, l.value).map(([n, u]) => `<button data-a="open" data-u="${esc(u)}">${esc(n)}</button>`).join('')}</div>
     <h3>Google dorks</h3>${dorks(l.type, l.value).map(d => `<div class="row"><span class="val">${esc(d)}</span><button data-a="open" data-u="${esc(g(d))}">искать</button><button data-a="copy" data-u="${esc(d)}">копировать</button></div>`).join('')}
     <h3>Заметка</h3><textarea id="lnote" placeholder="Откуда зацепка, что подтверждено, что нет">${esc(l.note)}</textarea>`;
@@ -198,6 +198,7 @@
       case 'copy': navigator.clipboard.writeText(b.dataset.u); L.toast('Скопировано'); break;
       case 'export': exportMd(); break;
       case 'toBoard': window.Board.addLead(c, l, uid); save(); setTab('board'); break;
+      case 'pasteFound': navigator.clipboard.readText().then(t => { t = (t || '').trim(); if (!t) return L.toast('Буфер обмена пуст'); addFound(l, 'из буфера', '', t.slice(0, 2000)); save(); updFound(l); L.toast('Добавлено под зацепку'); }).catch(() => L.toast('Нет доступа к буферу обмена')); break;
       case 'run': runTool(id); break;
       case 'stop': api.runStop(id, l.value); break;
       case 'svc': openService(id); break;

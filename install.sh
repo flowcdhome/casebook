@@ -30,7 +30,7 @@ download_electron() {
   say "Скачиваю Electron $ELECTRON_VERSION (около 100 МБ)…"
   if command -v curl >/dev/null 2>&1; then curl -fL --retry 3 -o "$TMP/e.zip" "$URL" || die "не удалось скачать $URL"
   elif command -v wget >/dev/null 2>&1; then wget -O "$TMP/e.zip" "$URL" || die "не удалось скачать $URL"
-  else die "нужен curl или wget"; fi
+  else die "нужен curl или wget (Debian/Ubuntu: sudo apt install curl)"; fi
   mkdir -p "$APP/electron"
   if command -v bsdtar >/dev/null 2>&1; then bsdtar -xf "$TMP/e.zip" -C "$APP/electron"
   elif command -v unzip >/dev/null 2>&1; then unzip -q -o "$TMP/e.zip" -d "$APP/electron"
@@ -43,6 +43,24 @@ download_electron() {
 ELECTRON="$(find_electron)" || { download_electron; ELECTRON="$APP/electron/electron"; }
 [ -x "$ELECTRON" ] || die "не найден исполняемый файл Electron"
 say "Electron: $ELECTRON"
+
+# Проверка системных библиотек: на минимальных установках (особенно Debian) часть из них не стоит
+if command -v ldd >/dev/null 2>&1; then
+  MISSING=$(ldd "$ELECTRON" 2>/dev/null | awk '/not found/ {print $1}' | tr '\n' ' ')
+  if [ -n "$MISSING" ]; then
+    say ""
+    say "Не хватает системных библиотек: $MISSING"
+    case "$FAMILY" in
+      *debian*|*ubuntu*) say "Установите: sudo apt install libgtk-3-0 libnss3 libxss1 libgbm1 libxtst6 libnotify4 libxkbcommon0 libatspi2.0-0 libdrm2 libasound2"
+                         say "(на Debian 13 и Ubuntu 24.04 вместо libasound2 пакет называется libasound2t64)" ;;
+      *arch*)            say "Установите: sudo pacman -S --needed gtk3 nss alsa-lib libxss libnotify libxtst" ;;
+      *gentoo*)          say "Установите: sudo emerge --ask x11-libs/gtk+ dev-libs/nss media-libs/alsa-lib x11-libs/libXScrnSaver x11-libs/libnotify" ;;
+      *)                 say "Установите GTK 3, NSS, ALSA, libXScrnSaver, libnotify средствами вашего дистрибутива." ;;
+    esac
+    say "После установки запустите этот скрипт ещё раз."
+    exit 1
+  fi
+fi
 
 # Старые файлы первой версии (лежали в корне папки)
 rm -f "$APP/index.html" "$APP/board.js" "$APP/preload.js"
